@@ -12,13 +12,53 @@ from lxml import etree
 # ตั้งค่าหน้าเว็บ Streamlit
 st.set_page_config(page_title="DOCX to EPUB Converter", layout="centered", page_icon="📖")
 
+# ส่วนหัวโปรแกรมและแจ้งเตือนความปลอดภัย
 st.title("📖 ระบบแปลงไฟล์ DOCX เป็น EPUB")
-st.write("อัปโหลดไฟล์ Word (.docx) เพื่อแปลงเป็น EPUB พร้อมระบบจัดสระลอยและฝังรูปภาพอัตโนมัติ")
+st.write("แปลงไฟล์ Word (.docx) เป็น EPUB พร้อมปรับแต่งสไตล์และจัดสระลอยให้อัตโนมัติ")
+
+# 🔒 กล่องเน้นย้ำความปลอดภัยของข้อมูล
+st.info("🔒 **ความปลอดภัยระดับสูงสุด:** ไฟล์เอกสารและฟอนต์ทั้งหมดจะถูกประมวลผลภายในระบบชั่วคราวขณะรันการทำงานเท่านั้น **ไม่มีการบันทึกหรือส่งออกไฟล์ไปยังอินเทอร์เน็ต/ฐานข้อมูลภายนอกใดๆ ทั้งสิ้น** ปลอดภัย 100%")
 
 # ==========================================
-# ฟังก์ชันแปลงไฟล์ (ปรับแก้โครงสร้าง XHTML ให้ถูกต้องแล้ว)
+# ส่วน UI สำหรับ Customize การตั้งค่า (พร้อมค่า Default ตามกำหนด)
 # ==========================================
-def convert_docx_to_epub(docx_path, output_path):
+st.subheader("⚙️ ปรับแต่งสไตล์ (Customize Style)")
+
+col_font, col_size = st.columns(2)
+with col_font:
+    font_choice = st.selectbox(
+        "ฟอนต์เริ่มต้น (Font Family)",
+        options=["Niramit", "Sarabun", "Noto Sans Thai", "อัปโหลดฟอนต์เอง (Custom Font)", "ระบบมาตรฐาน (Sans-serif)"],
+        index=0  # Default: Niramit
+    )
+
+with col_size:
+    font_size = st.number_input("ขนาดตัวอักษร (Font Size px)", min_value=10, max_value=32, value=16, step=1) # Default: 16
+
+col_line, col_margin = st.columns(2)
+with col_line:
+    line_height = st.number_input("ระยะห่างบรรทัด (Line-Height)", min_value=1.0, max_value=3.0, value=1.3, step=0.1) # Default: 1.3
+
+with col_margin:
+    margin_bottom = st.number_input("ระยะห่างย่อหน้า (Margin-Bottom em)", min_value=0.0, max_value=3.0, value=0.4, step=0.1) # Default: 0.4
+
+# ส่วนอัปโหลดฟอนต์ส่วนตัว (จะแสดงผลเมื่อผู้ใช้เลือก "อัปโหลดฟอนต์เอง")
+custom_uploaded_fonts = {}
+if font_choice == "อัปโหลดฟอนต์เอง (Custom Font)":
+    st.markdown("---")
+    st.write("📁 **อัปโหลดไฟล์ฟอนต์ส่วนตัว (.ttf หรือ .otf):**")
+    cf1, cf2 = st.columns(2)
+    with cf1:
+        custom_uploaded_fonts["Regular"] = st.file_uploader("1. ตัวปกติ (Regular)", type=["ttf", "otf"], key="font_reg")
+        custom_uploaded_fonts["Bold"] = st.file_uploader("3. ตัวหนา (Bold)", type=["ttf", "otf"], key="font_bold")
+    with cf2:
+        custom_uploaded_fonts["Italic"] = st.file_uploader("2. ตัวเอียง (Italic)", type=["ttf", "otf"], key="font_italic")
+        custom_uploaded_fonts["BoldItalic"] = st.file_uploader("4. ตัวหนาเอียง (BoldItalic)", type=["ttf", "otf"], key="font_bi")
+
+# ==========================================
+# ฟังก์ชันแปลงไฟล์ EPUB
+# ==========================================
+def convert_docx_to_epub(docx_path, output_path, font_choice, font_size, line_height, margin_bottom, custom_fonts_dict):
     try:
         doc = Document(docx_path)
         book = epub.EpubBook()
@@ -27,27 +67,127 @@ def convert_docx_to_epub(docx_path, output_path):
         book.set_title(base_name)
         book.set_language('th')
 
-        # CSS สำหรับจัดรูปแบบหนังสือ
-        css_content = """
-        body { 
-            font-family: sans-serif; 
+        font_faces = ""
+        font_family_css = "sans-serif"
+        fonts_dir = "fonts"
+
+        styles_config = [
+            ("Regular", "normal", "normal"),
+            ("Italic", "normal", "italic"),
+            ("Bold", "bold", "normal"),
+            ("BoldItalic", "bold", "italic")
+        ]
+
+        # กรณีที่ 1: ผู้ใช้อัปโหลดฟอนต์มาเอง
+        if font_choice == "อัปโหลดฟอนต์เอง (Custom Font)":
+            has_added_any_font = False
+            for style_key, weight, style in styles_config:
+                font_file_obj = custom_fonts_dict.get(style_key)
+                if font_file_obj is not None:
+                    font_bytes = font_file_obj.read()
+                    font_ext = font_file_obj.name.split('.')[-1].lower()
+                    font_filename = f"custom_{style_key.lower()}.{font_ext}"
+                    
+                    font_item = epub.EpubItem(
+                        uid=f"font_custom_{style_key.lower()}",
+                        file_name=f"fonts/{font_filename}",
+                        media_type=f"font/{font_ext}",
+                        content=font_bytes
+                    )
+                    book.add_item(font_item)
+
+                    font_faces += f"""
+                    @font-face {{
+                        font-family: 'CustomBookFont';
+                        src: url('../fonts/{font_filename}');
+                        font-weight: {weight};
+                        font-style: {style};
+                    }}
+                    """
+                    has_added_any_font = True
+            
+            if has_added_any_font:
+                font_family_css = "'CustomBookFont', sans-serif"
+
+        # กรณีที่ 2: เลือกฟอนต์มาตรฐานที่เราเตรียมไว้ในโฟลเดอร์ fonts/
+        else:
+            font_family_mapping = {
+                "Niramit": {
+                    "Regular": "Niramit-Regular.ttf",
+                    "Italic": "Niramit-Italic.ttf",
+                    "Bold": "Niramit-Bold.ttf",
+                    "BoldItalic": "Niramit-BoldItalic.ttf"
+                },
+                "Sarabun": {
+                    "Regular": "Sarabun-Regular.ttf",
+                    "Italic": "Sarabun-Italic.ttf",
+                    "Bold": "Sarabun-Bold.ttf",
+                    "BoldItalic": "Sarabun-BoldItalic.ttf"
+                },
+                "Noto Sans Thai": {
+                    "Regular": "NotoSansThai-Regular.ttf",
+                    "Italic": "NotoSansThai-Italic.ttf",
+                    "Bold": "NotoSansThai-Bold.ttf",
+                    "BoldItalic": "NotoSansThai-BoldItalic.ttf"
+                }
+            }
+
+            selected_font_set = font_family_mapping.get(font_choice)
+            if selected_font_set:
+                has_added_any_font = False
+                for style_key, weight, style in styles_config:
+                    font_filename = selected_font_set.get(style_key)
+                    if font_filename:
+                        font_path = os.path.join(fonts_dir, font_filename)
+                        if os.path.exists(font_path):
+                            font_ext = font_filename.split('.')[-1].lower()
+                            with open(font_path, 'rb') as f:
+                                font_data = f.read()
+                            
+                            font_item = epub.EpubItem(
+                                uid=f"font_{style_key.lower()}",
+                                file_name=f"fonts/{font_filename}",
+                                media_type=f"font/{font_ext}",
+                                content=font_data
+                            )
+                            book.add_item(font_item)
+
+                            font_faces += f"""
+                            @font-face {{
+                                font-family: 'CustomBookFont';
+                                src: url('../fonts/{font_filename}');
+                                font-weight: {weight};
+                                font-style: {style};
+                            }}
+                            """
+                            has_added_any_font = True
+                
+                if has_added_any_font:
+                    font_family_css = "'CustomBookFont', sans-serif"
+
+        # สร้าง CSS หลักบังคับสไตล์ด้วย !important
+        css_content = font_faces + f"""
+        body {{ 
+            font-family: {font_family_css} !important; 
+            font-size: {font_size}px !important;
             font-feature-settings: "liga" 1, "ccmp" 1;
             -webkit-font-feature-settings: "liga" 1, "ccmp" 1;
             text-rendering: optimizeLegibility;
-        }
-        p { 
+        }}
+        p {{ 
             text-align: left !important; 
-            line-height: 1.3 !important; 
+            line-height: {line_height} !important; 
             margin-top: 0 !important; 
-            margin-bottom: 0.4em !important;
+            margin-bottom: {margin_bottom}em !important;
             padding-top: 0 !important;
             padding-bottom: 0 !important;
+            font-size: {font_size}px !important;
             word-break: normal;
             line-break: strict;
-        }
-        h1 { text-align: center; margin-top: 2em; margin-bottom: 1em; }
-        img { max-width: 100%; height: auto; }
-        .bullet-point { margin-left: 2em; text-indent: -1em; }
+        }}
+        h1 {{ text-align: center; margin-top: 2em; margin-bottom: 1em; }}
+        img {{ max-width: 100%; height: auto; }}
+        .bullet-point {{ margin-left: 2em; text-indent: -1em; }}
         """
 
         style_item = epub.EpubItem(
@@ -88,7 +228,6 @@ def convert_docx_to_epub(docx_path, output_path):
                 img_part = doc.part.related_parts[rel_id]
                 book.set_cover("cover.png", img_part.blob)
 
-        # แก้ไข 1: ไม่ครอบ <html><body> และใส่ alt
         cover_page.content = '<div style="text-align:center;"><img src="cover.png" alt="Cover" style="height:100%; max-width:100%;"/></div>'
         cover_page.add_item(style_item)
         book.add_item(cover_page)
@@ -101,7 +240,6 @@ def convert_docx_to_epub(docx_path, output_path):
         for para in doc.paragraphs:
             if para.style.name.startswith('Heading'):
                 if current_chapter:
-                    # แก้ไข 2: ตัด <html><body> ออก ส่งเฉพาะ HTML Content
                     current_chapter.content = content_html
                     current_chapter.add_item(style_item)
                     book.add_item(current_chapter)
@@ -119,7 +257,6 @@ def convert_docx_to_epub(docx_path, output_path):
                 if 'List' in para.style.name or para._element.xpath('./w:pPr/w:numPr'):
                     is_bullet = True
 
-                # อัลกอริทึมจัดการ Run และสระลอย (ตามโค้ดเดิมของคุณ)
                 para_runs = [Run(r, para) for r in para._element.xpath('.//w:r')]
                 run_texts = [run.text if run.text else "" for run in para_runs]
                 
@@ -174,7 +311,6 @@ def convert_docx_to_epub(docx_path, output_path):
                         content_html += f'<p>{para_html}</p>'
 
         if current_chapter:
-            # แก้ไข 3: ตัด <html><body> ออก
             current_chapter.content = content_html
             current_chapter.add_item(style_item)
             book.add_item(current_chapter)
@@ -194,34 +330,40 @@ def convert_docx_to_epub(docx_path, output_path):
         return False
 
 # ==========================================
-# ส่วนประกอบหน้า UI (Streamlit UI)
+# ส่วนอัปโหลดและประมวลผล
 # ==========================================
+st.divider()
 uploaded_file = st.file_uploader("เลือกไฟล์ DOCX ที่ต้องการแปลง", type=["docx"])
 
 if uploaded_file is not None:
-    # สร้างไฟล์ชั่วคราวบนเซิร์ฟเวอร์
     temp_docx_path = f"temp_{uploaded_file.name}"
     output_epub_path = uploaded_file.name.replace(".docx", ".epub").replace(".DOCX", ".epub")
     
     with open(temp_docx_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
 
-    col1, col2 = st.columns([1, 1])
-    
-    with col1:
-        if st.button("🚀 เริ่มแปลงไฟล์", type="primary", use_container_width=True):
-            with st.spinner("กำลังแปลงไฟล์และจัดระเบียบโครงสร้าง..."):
-                success = convert_docx_to_epub(temp_docx_path, output_epub_path)
-                
-                if success and os.path.exists(output_epub_path):
-                    st.success("แปลงไฟล์สำเร็จ!")
-                    with open(output_epub_path, "rb") as file:
-                        st.download_button(
-                            label="⬇️ ดาวน์โหลดไฟล์ EPUB",
-                            data=file,
-                            file_name=os.path.basename(output_epub_path),
-                            mime="application/epub+zip",
-                            use_container_width=True
-                        )
-                    # ลบไฟล์ชั่วคราว
-                    if os.path.exists(temp_docx_path): os.remove(temp_docx_path)
+    if st.button("🚀 เริ่มแปลงไฟล์", type="primary", use_container_width=True):
+        with st.spinner("กำลังประมวลผลจัดสระลอยและฝังรูปแบบสไตล์..."):
+            success = convert_docx_to_epub(
+                temp_docx_path, 
+                output_epub_path,
+                font_choice,
+                font_size,
+                line_height,
+                margin_bottom,
+                custom_uploaded_fonts
+            )
+            
+            if success and os.path.exists(output_epub_path):
+                st.success("แปลงไฟล์สำเร็จ!")
+                with open(output_epub_path, "rb") as file:
+                    st.download_button(
+                        label="⬇️ ดาวน์โหลดไฟล์ EPUB",
+                        data=file,
+                        file_name=os.path.basename(output_epub_path),
+                        mime="application/epub+zip",
+                        use_container_width=True
+                    )
+                # ลบไฟล์ชั่วคราวทิ้งทันทีเพื่อความปลอดภัย
+                if os.path.exists(temp_docx_path): 
+                    os.remove(temp_docx_path)
