@@ -9,10 +9,11 @@ from docx.text.run import Run
 from ebooklib import epub
 from lxml import etree
 
+# ==========================================
 # ตั้งค่าหน้าเว็บ Streamlit
+# ==========================================
 st.set_page_config(page_title="DOCX to EPUB Converter", layout="centered", page_icon="📖")
 
-# ส่วนหัวโปรแกรมและแจ้งเตือนความปลอดภัย
 st.title("📖 ระบบแปลงไฟล์ DOCX เป็น EPUB")
 st.write("แปลงไฟล์ Word (.docx) เป็น EPUB พร้อมปรับแต่งสไตล์และจัดสระลอยให้อัตโนมัติ")
 
@@ -20,7 +21,7 @@ st.write("แปลงไฟล์ Word (.docx) เป็น EPUB พร้อ�
 st.info("🔒 **ความปลอดภัยระดับสูงสุด:** ไฟล์เอกสารและฟอนต์ทั้งหมดจะถูกประมวลผลภายในระบบชั่วคราวขณะรันการทำงานเท่านั้น **ไม่มีการบันทึกหรือส่งออกไฟล์ไปยังอินเทอร์เน็ต/ฐานข้อมูลภายนอกใดๆ ทั้งสิ้น** ปลอดภัย 100%")
 
 # ==========================================
-# ส่วน UI สำหรับ Customize การตั้งค่า (พร้อมค่า Default ตามกำหนด)
+# ส่วน UI สำหรับ Customize การตั้งค่า (พร้อมค่า Default)
 # ==========================================
 st.subheader("⚙️ ปรับแต่งสไตล์ (Customize Style)")
 
@@ -33,14 +34,14 @@ with col_font:
     )
 
 with col_size:
-    font_size = st.number_input("ขนาดตัวอักษร (Font Size px)", min_value=10, max_value=32, value=16, step=1) # Default: 16
+    font_size = st.number_input("ขนาดตัวอักษร (Font Size px)", min_value=10, max_value=32, value=16, step=1)
 
 col_line, col_margin = st.columns(2)
 with col_line:
-    line_height = st.number_input("ระยะห่างบรรทัด (Line-Height)", min_value=1.0, max_value=3.0, value=1.3, step=0.1) # Default: 1.3
+    line_height = st.number_input("ระยะห่างบรรทัด (Line-Height)", min_value=1.0, max_value=3.0, value=1.3, step=0.1)
 
 with col_margin:
-    margin_bottom = st.number_input("ระยะห่างย่อหน้า (Margin-Bottom em)", min_value=0.0, max_value=3.0, value=0.4, step=0.1) # Default: 0.4
+    margin_bottom = st.number_input("ระยะห่างย่อหน้า (Margin-Bottom em)", min_value=0.0, max_value=3.0, value=0.4, step=0.1)
 
 # ส่วนอัปโหลดฟอนต์ส่วนตัว (จะแสดงผลเมื่อผู้ใช้เลือก "อัปโหลดฟอนต์เอง")
 custom_uploaded_fonts = {}
@@ -63,7 +64,11 @@ def convert_docx_to_epub(docx_path, output_path, font_choice, font_size, line_he
         doc = Document(docx_path)
         book = epub.EpubBook()
         
+        # จัดการชื่อหนังสือ (ตัดคำว่า temp_ ออกถ้ามี)
         base_name = os.path.splitext(os.path.basename(docx_path))[0]
+        if base_name.startswith("temp_"):
+            base_name = base_name[5:]
+            
         book.set_title(base_name)
         book.set_language('th')
 
@@ -330,50 +335,6 @@ def convert_docx_to_epub(docx_path, output_path, font_choice, font_size, line_he
         return False
 
 # ==========================================
-# ส่วนอัปโหลดและประมวลผล
-# ==========================================
-st.divider()
-uploaded_file = st.file_uploader("เลือกไฟล์ DOCX ที่ต้องการแปลง", type=["docx"])
-
-if uploaded_file is not None:
-    temp_docx_path = f"temp_{uploaded_file.name}"
-    output_epub_path = uploaded_file.name.replace(".docx", ".epub").replace(".DOCX", ".epub")
-    
-    with open(temp_docx_path, "wb") as f:
-        f.write(uploaded_file.getbuffer())
-
-    if st.button("🚀 เริ่มแปลงไฟล์", type="primary", use_container_width=True):
-        with st.spinner("กำลังประมวลผลจัดสระลอยและฝังรูปแบบสไตล์..."):
-            success = convert_docx_to_epub(
-                temp_docx_path, 
-                output_epub_path,
-                font_choice,
-                font_size,
-                line_height,
-                margin_bottom,
-                custom_uploaded_fonts
-            )
-            
-            if success and os.path.exists(output_epub_path):
-                st.balloons() # แสดงเอฟเฟกต์แสดงความยินดี
-                st.success("🎉 แปลงไฟล์สำเร็จแล้ว! กดปุ่มด้านล่างเพื่อรับไฟล์ได้ทันที")
-                
-                # อ่านไฟล์เตรียมให้กดดาวน์โหลด
-                with open(output_epub_path, "rb") as file:
-                    st.download_button(
-                        label="📥 คลิกที่นี่เพื่อดาวน์โหลดไฟล์ EPUB",
-                        data=file,
-                        file_name=os.path.basename(output_epub_path),
-                        mime="application/epub+zip",
-                        type="primary",
-                        use_container_width=True
-                    )
-                
-                # ลบไฟล์ชั่วคราวทิ้งทันทีเพื่อความปลอดภัย
-                if os.path.exists(temp_docx_path): 
-                    os.remove(temp_docx_path)
-
-# ==========================================
 # ส่วนอัปโหลด ประมวลผล และปุ่มล้างข้อมูล
 # ==========================================
 st.divider()
@@ -386,18 +347,17 @@ if uploaded_file is not None:
     with open(temp_docx_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
 
-    # สร้างปุ่ม 2 ปุ่มคู่กัน (ปุ่มเริ่มแปลงไฟล์ และ ปุ่มเริ่มต้นใหม่)
+    # สร้างปุ่ม 2 ปุ่มคู่กัน (เริ่มแปลงไฟล์ / ล้างข้อมูล)
     col_start, col_reset = st.columns([2, 1])
     
     with col_start:
         start_btn = st.button("🚀 เริ่มแปลงไฟล์", type="primary", use_container_width=True)
         
     with col_reset:
-        # ปุ่ม Reset สำหรับล้างไฟล์และเริ่มต้นใหม่
         reset_btn = st.button("🔄 ล้างข้อมูล / เริ่มต้นใหม่", type="secondary", use_container_width=True)
 
     if reset_btn:
-        # ลบไฟล์ชั่วคราวค้างในระบบ (ถ้ามี) แล้วสั่งรีโหลดหน้าเว็บทันที
+        # ลบไฟล์ชั่วคราวแล้วรีโหลดหน้าเว็บใหม่
         if os.path.exists(temp_docx_path): 
             os.remove(temp_docx_path)
         if os.path.exists(output_epub_path): 
@@ -430,5 +390,6 @@ if uploaded_file is not None:
                         use_container_width=True
                     )
                 
+                # ลบไฟล์ docx ชั่วคราวทิ้งทันที
                 if os.path.exists(temp_docx_path): 
                     os.remove(temp_docx_path)
