@@ -355,15 +355,20 @@ if uploaded_file is not None:
             )
             
             if success and os.path.exists(output_epub_path):
-                st.success("แปลงไฟล์สำเร็จ!")
+                st.balloons() # แสดงเอฟเฟกต์แสดงความยินดี
+                st.success("🎉 แปลงไฟล์สำเร็จแล้ว! กดปุ่มด้านล่างเพื่อรับไฟล์ได้ทันที")
+                
+                # อ่านไฟล์เตรียมให้กดดาวน์โหลด
                 with open(output_epub_path, "rb") as file:
                     st.download_button(
-                        label="⬇️ ดาวน์โหลดไฟล์ EPUB",
+                        label="📥 คลิกที่นี่เพื่อดาวน์โหลดไฟล์ EPUB",
                         data=file,
                         file_name=os.path.basename(output_epub_path),
                         mime="application/epub+zip",
+                        type="primary",
                         use_container_width=True
                     )
+                
                 # ลบไฟล์ชั่วคราวทิ้งทันทีเพื่อความปลอดภัย
                 if os.path.exists(temp_docx_path): 
                     os.remove(temp_docx_path)
