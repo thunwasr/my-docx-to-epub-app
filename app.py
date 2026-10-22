@@ -372,3 +372,63 @@ if uploaded_file is not None:
                 # ลบไฟล์ชั่วคราวทิ้งทันทีเพื่อความปลอดภัย
                 if os.path.exists(temp_docx_path): 
                     os.remove(temp_docx_path)
+
+# ==========================================
+# ส่วนอัปโหลด ประมวลผล และปุ่มล้างข้อมูล
+# ==========================================
+st.divider()
+uploaded_file = st.file_uploader("เลือกไฟล์ DOCX ที่ต้องการแปลง", type=["docx"], key="docx_uploader")
+
+if uploaded_file is not None:
+    temp_docx_path = f"temp_{uploaded_file.name}"
+    output_epub_path = uploaded_file.name.replace(".docx", ".epub").replace(".DOCX", ".epub")
+    
+    with open(temp_docx_path, "wb") as f:
+        f.write(uploaded_file.getbuffer())
+
+    # สร้างปุ่ม 2 ปุ่มคู่กัน (ปุ่มเริ่มแปลงไฟล์ และ ปุ่มเริ่มต้นใหม่)
+    col_start, col_reset = st.columns([2, 1])
+    
+    with col_start:
+        start_btn = st.button("🚀 เริ่มแปลงไฟล์", type="primary", use_container_width=True)
+        
+    with col_reset:
+        # ปุ่ม Reset สำหรับล้างไฟล์และเริ่มต้นใหม่
+        reset_btn = st.button("🔄 ล้างข้อมูล / เริ่มต้นใหม่", type="secondary", use_container_width=True)
+
+    if reset_btn:
+        # ลบไฟล์ชั่วคราวค้างในระบบ (ถ้ามี) แล้วสั่งรีโหลดหน้าเว็บทันที
+        if os.path.exists(temp_docx_path): 
+            os.remove(temp_docx_path)
+        if os.path.exists(output_epub_path): 
+            os.remove(output_epub_path)
+        st.rerun()
+
+    if start_btn:
+        with st.spinner("กำลังประมวลผลจัดสระลอยและฝังรูปแบบสไตล์..."):
+            success = convert_docx_to_epub(
+                temp_docx_path, 
+                output_epub_path,
+                font_choice,
+                font_size,
+                line_height,
+                margin_bottom,
+                custom_uploaded_fonts
+            )
+            
+            if success and os.path.exists(output_epub_path):
+                st.balloons()
+                st.success("🎉 แปลงไฟล์สำเร็จแล้ว! กดปุ่มด้านล่างเพื่อรับไฟล์ได้ทันที")
+                
+                with open(output_epub_path, "rb") as file:
+                    st.download_button(
+                        label="📥 คลิกที่นี่เพื่อดาวน์โหลดไฟล์ EPUB",
+                        data=file,
+                        file_name=os.path.basename(output_epub_path),
+                        mime="application/epub+zip",
+                        type="primary",
+                        use_container_width=True
+                    )
+                
+                if os.path.exists(temp_docx_path): 
+                    os.remove(temp_docx_path)
